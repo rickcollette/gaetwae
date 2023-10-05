@@ -1,6 +1,6 @@
 package algorithms
 import (
-	"github.com/rickcollette/gaetwae/shared"
+	"github.com/rickcollette/gaetwae/pkg/shared"
 )
 
 func WeightedLeastConnectionsBalancer() *shared.BackendInstance {

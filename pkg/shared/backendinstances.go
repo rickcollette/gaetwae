@@ -6,8 +6,8 @@ type BackendInstance struct {
     Name        string
     URL         string
     Connections int
+    Weight      int
 }
-
 // backendInstances holds the current backend instances
 var backendInstances []BackendInstance
 

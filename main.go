@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-    "github.com/rickcollette/gaetwae/algorithms"
-    "github.com/rickcollette/gaetwae/shared"
+    "github.com/rickcollette/gaetwae/pkg/algorithms"
+    "github.com/rickcollette/gaetwae/pkg/shared"
 )
 
 
