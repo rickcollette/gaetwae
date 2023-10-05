@@ -7,7 +7,7 @@ import (
 var weightedRoundRobinIndex int
 
 func WeightedRoundRobinBalancer() *shared.BackendInstance {
-    index := weightedRoundRobinIndex % len(backendInstances)
+    index := weightedRoundRobinIndex % len(shared.GetBackendInstances())
     weightedRoundRobinIndex++
-    return &backendInstances[index]
+    return &shared.GetBackendInstances()[index]
 }

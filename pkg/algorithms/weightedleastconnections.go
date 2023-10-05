@@ -7,7 +7,7 @@ func WeightedLeastConnectionsBalancer() *shared.BackendInstance {
     var selected *shared.BackendInstance
     minWeightedConnections := -1
 
-    for _, backend := range backendInstances {
+    for _, backend := range shared.GetBackendInstances() {
         if selected == nil || (backend.Weight * backend.Connections) < minWeightedConnections {
             selected = &backend
             minWeightedConnections = backend.Weight * backend.Connections

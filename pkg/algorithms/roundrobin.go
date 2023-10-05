@@ -6,7 +6,7 @@ import (
 var roundRobinIndex int
 
 func RoundRobinBalancer() *shared.BackendInstance {
-    index := roundRobinIndex % len(backendInstances)
+    index := roundRobinIndex % len(shared.GetBackendInstances())
     roundRobinIndex++
-    return &backendInstances[index]
+    return &shared.GetBackendInstances()[index]
 }
