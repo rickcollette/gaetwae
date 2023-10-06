@@ -7,12 +7,38 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/rickcollette/gaetwae/pkg/algorithms"
+	"github.com/rickcollette/gaetwae/pkg/cache"
+	"github.com/rickcollette/gaetwae/pkg/ratelimit"
 	"github.com/rickcollette/gaetwae/pkg/shared"
 	"github.com/rickcollette/gaetwae/pkg/tls"
+	"golang.org/x/time/rate"
 )
 
+type CacheConfig struct {
+	Enabled        bool   `json:"enabled"`
+	Type           string `json:"type"`
+	ExpirationTime int    `json:"expirationTimeSeconds"`
+
+	// For In-Memory Cache
+	Capacity int `json:"capacity,omitempty"`
+
+	// For Redis Cache
+	Redis struct {
+		Address  string `json:"address,omitempty"`
+		Password string `json:"password,omitempty"`
+		DB       int    `json:"db,omitempty"`
+	} `json:"redis,omitempty"`
+
+	// For Memcached Cache
+	Memcached struct {
+		Servers []string `json:"servers,omitempty"`
+	} `json:"memcached,omitempty"`
+}
 type Config struct {
 	LoadBalancingAlgorithm string                   `json:"loadBalancingAlgorithm"`
 	Backends               []shared.BackendInstance `json:"backends"`
@@ -25,19 +51,46 @@ type Config struct {
 		Value   string `json:"value"`
 		Enabled bool   `json:"enabled"`
 	} `json:"headers"`
+	RateLimiting struct {
+		Enabled           bool `json:"enabled"`
+		RequestsPerMinute int  `json:"requestsPerMinute"`
+	} `json:"rateLimiting"`
+	Cache CacheConfig `json:"cache"`
 }
 
-var config Config
+var (
+    config Config
+    appCache cache.Cache  // Changed the variable name to appCache
+) 
 
 func main() {
-	if err := loadConfig("gaetwae.conf"); err != nil {
-		fmt.Println("Error loading configuration:", err)
-		return
+    err := loadConfig("gaetwae.conf")
+    if err != nil {
+        fmt.Println("Error loading configuration:", err)
+        return
+    }
+if config.Cache.Enabled {
+    switch config.Cache.Type {
+    case "inMemory":
+        appCache = cache.NewInMemoryCache(config.Cache.Capacity)
+    case "redis":
+        appCache = cache.NewRedisCache(config.Cache.Redis.Address, config.Cache.Redis.Password, config.Cache.Redis.DB)
+    case "memcached":
+        servers := strings.Join(config.Cache.Memcached.Servers, ",")
+        appCache = cache.NewMemcachedCache(servers, strconv.Itoa(config.Cache.ExpirationTime))
+    default:
+        fmt.Println("Unsupported cache type")
+        return
+    }
+}
+	if config.RateLimiting.Enabled {
+		r := rate.Every(1 * time.Minute / time.Duration(config.RateLimiting.RequestsPerMinute))
+		limiter := rate.NewLimiter(r, int(config.RateLimiting.RequestsPerMinute))
+		rateLimitMiddleware := ratelimit.RateLimitMiddleware(limiter)
+		http.Handle("/", rateLimitMiddleware(reverseProxyHandler()))
+	} else {
+		http.HandleFunc("/", reverseProxyHandler())
 	}
-
-	fmt.Println("Server is running on :8080...")
-	http.HandleFunc("/", reverseProxyHandler())
-
 	if err := tls.StartHTTPSServer(nil, config.TLS.CertPath, config.TLS.KeyPath); err != nil {
 		fmt.Println("Error starting HTTPS server:", err)
 	}
@@ -73,7 +126,14 @@ func loadConfig(filename string) error {
 
 func reverseProxyHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var backend *shared.BackendInstance
+		if config.Cache.Enabled {
+            if content, err := appCache.Get(r.URL.Path); err == nil {
+                w.Write(content)
+                return
+            }
+		}
+
+		var backend *shared.BackendInstance  // Declared the backend variable
 
 		switch config.LoadBalancingAlgorithm {
 		case "leastConnections":
