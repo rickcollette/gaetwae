@@ -4,11 +4,11 @@ Reverse proxy for highly-scalable rest api services
 
 # TODO
 
-Load Balancing Algorithms: Choose a load balancing algorithm that suits your needs. Common algorithms include Round Robin, Least Connections, Weighted Round Robin, and Weighted Least Connections. This algorithm determines how incoming requests are distributed among backend instances.
+Load Balancing Algorithms: FINAL COMPLETENESS CHECK
 
 Backend Instances: Deploy multiple instances of your backend services, each running on a separate server or container. These instances should be identical and serve the same purpose, allowing you to scale horizontally as needed.
 
-Service Discovery: Implement a service discovery mechanism that keeps track of the available backend instances and their health status. Tools like Consul, etcd, or Kubernetes' service discovery can help with this. Service discovery ensures that your API Gateway knows where to route requests.
+Service Discovery: Implement a service discovery mechanism that keeps track of the available backend instances and their health status.
 
 Dynamic Configuration: Make your load balancer's configuration dynamic. As backend instances scale up or down, your API Gateway should automatically discover and include these instances in the load balancing pool.
 

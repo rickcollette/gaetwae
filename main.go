@@ -3,67 +3,106 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-    "github.com/rickcollette/gaetwae/pkg/algorithms"
-    "github.com/rickcollette/gaetwae/pkg/shared"
+	"os"
+
+	"github.com/rickcollette/gaetwae/pkg/algorithms"
+	"github.com/rickcollette/gaetwae/pkg/shared"
+	"github.com/rickcollette/gaetwae/pkg/tls"
 )
 
-
-var backendInstances []shared.BackendInstance
-
-func main() {
-    // Read the configuration from the JSON file
-    if err := loadConfig("gaetwae.conf"); err != nil {
-        fmt.Println("Error loading configuration:", err)
-        return
-    }
-
-    // Start the HTTP server on port 8080
-    fmt.Println("Server is running on :8080...")
-    http.HandleFunc("/", reverseProxyHandler())
-    err := http.ListenAndServe(":8080", nil)
-    if err != nil {
-        fmt.Println(err)
-    }
+type Config struct {
+	LoadBalancingAlgorithm string                   `json:"loadBalancingAlgorithm"`
+	Backends               []shared.BackendInstance `json:"backends"`
+	TLS                    struct {
+		CertPath string `json:"certPath"`
+		KeyPath  string `json:"keyPath"`
+	} `json:"tls"`
+	Headers []struct {
+		Name    string `json:"name"`
+		Value   string `json:"value"`
+		Enabled bool   `json:"enabled"`
+	} `json:"headers"`
 }
 
-func reverseProxyHandler() http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        // Use a load balancing algorithm to select a backend instance
-        backend := algorithms.WeightedRoundRobinBalancer() // You can choose the desired algorithm here
-        backendURL := backend.URL
+var config Config
 
-        // Create a reverse proxy for the selected backend service
-        proxy := httputil.NewSingleHostReverseProxy(parseURL(backendURL))
+func main() {
+	if err := loadConfig("gaetwae.conf"); err != nil {
+		fmt.Println("Error loading configuration:", err)
+		return
+	}
 
-        // Serve the request using the reverse proxy
-        proxy.ServeHTTP(w, r)
-    }
+	fmt.Println("Server is running on :8080...")
+	http.HandleFunc("/", reverseProxyHandler())
+
+	if err := tls.StartHTTPSServer(nil, config.TLS.CertPath, config.TLS.KeyPath); err != nil {
+		fmt.Println("Error starting HTTPS server:", err)
+	}
 }
 
 func loadConfig(filename string) error {
-    // Read the JSON configuration file
-    data, err := ioutil.ReadFile(filename)
-    if err != nil {
-        return err
-    }
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
 
-    // Unmarshal the JSON data into the backendInstances slice
-    if err := json.Unmarshal(data, &backendInstances); err != nil {
-        return err
-    }
+	if err := json.Unmarshal(data, &config); err != nil {
+		return err
+	}
 
-    return nil
+	shared.SetBackendInstances(config.Backends)
+
+	// Validate the load balancing algorithm
+	validAlgorithms := []string{"leastConnections", "roundRobin", "weightedLeastConnections", "weightedRoundRobin"}
+	valid := false
+	for _, alg := range validAlgorithms {
+		if config.LoadBalancingAlgorithm == alg {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("invalid load balancing algorithm specified")
+	}
+
+	return nil
+}
+
+func reverseProxyHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var backend *shared.BackendInstance
+
+		switch config.LoadBalancingAlgorithm {
+		case "leastConnections":
+			backend = algorithms.LeastConnectionsBalancer()
+		case "roundRobin":
+			backend = algorithms.RoundRobinBalancer()
+		case "weightedLeastConnections":
+			backend = algorithms.WeightedLeastConnectionsBalancer()
+		case "weightedRoundRobin":
+			backend = algorithms.WeightedRoundRobinBalancer()
+		}
+
+		backendURL := backend.URL
+		proxy := httputil.NewSingleHostReverseProxy(parseURL(backendURL))
+
+		for _, header := range config.Headers {
+			if header.Enabled {
+				r.Header.Set(header.Name, header.Value)
+			}
+		}
+
+		proxy.ServeHTTP(w, r)
+	}
 }
 
 func parseURL(rawURL string) *url.URL {
-    // Parse the backend URL
-    parsedURL, err := url.Parse(rawURL)
-    if err != nil {
-        panic(err)
-    }
-    return parsedURL
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		panic(err)
+	}
+	return parsedURL
 }
