@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -39,6 +41,17 @@ type CacheConfig struct {
 		Servers []string `json:"servers,omitempty"`
 	} `json:"memcached,omitempty"`
 }
+type TransformationConfig struct {
+    Headers []struct {
+        Key   string `json:"key"`
+        Value string `json:"value"`
+    } `json:"headers"`
+    Body struct {
+        Type    string `json:"type"`
+        Content string `json:"content"`
+    } `json:"body"`
+}
+
 type Config struct {
 	LoadBalancingAlgorithm string                   `json:"loadBalancingAlgorithm"`
 	Backends               []shared.BackendInstance `json:"backends"`
@@ -56,6 +69,10 @@ type Config struct {
 		RequestsPerMinute int  `json:"requestsPerMinute"`
 	} `json:"rateLimiting"`
 	Cache CacheConfig `json:"cache"`
+    Transformations struct {
+        Request  TransformationConfig `json:"request"`
+        Response TransformationConfig `json:"response"`
+    } `json:"transformations"`
 }
 
 var (
@@ -154,7 +171,27 @@ func reverseProxyHandler() http.HandlerFunc {
 				r.Header.Set(header.Name, header.Value)
 			}
 		}
-
+        for _, header := range config.Transformations.Request.Headers {
+            r.Header.Set(header.Key, header.Value)
+        }
+        
+        // If using a reverse proxy, you can set up a ModifyResponse function to apply response transformations
+        proxy.ModifyResponse = func(res *http.Response) error {
+            for _, header := range config.Transformations.Response.Headers {
+                res.Header.Set(header.Key, header.Value)
+            }
+        
+            if config.Transformations.Response.Body.Type == "append" {
+                body, _ := io.ReadAll(res.Body)
+                body = append(body, config.Transformations.Response.Body.Content...)
+                res.Body = io.NopCloser(bytes.NewReader(body))
+            }
+        
+            // Handle other body transformation types as needed
+        
+            return nil
+        }
+        
 		proxy.ServeHTTP(w, r)
 	}
 }
