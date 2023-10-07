@@ -21,11 +21,13 @@ type XMLObject struct {
 	Content []XMLField `xml:",any"`
 }
 
-// Struct for each field in the XML data
 type XMLField struct {
 	XMLName xml.Name
 	Value   string `xml:",chardata"`
+	Nested  *XMLObject // Added this line to include the Nested field
 }
+
+
 // Header transformations
 func AddHeader(r *http.Request, key, value string) {
 	r.Header.Add(key, value)

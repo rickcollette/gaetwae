@@ -4,6 +4,21 @@ import (
 	"log"
 	"net/http"
 )
+type TransformationConfig struct {
+    Headers []struct {
+        Key   string `json:"key"`
+        Value string `json:"value"`
+    } `json:"headers"`
+    Body struct {
+        Type    string `json:"type"`
+        Content string `json:"content"`
+    } `json:"body"`
+    URLParams []struct {  // Added this field to include URLParams
+        Key   string `json:"key"`
+        Value string `json:"value"`
+    } `json:"urlParams"`  // Assuming that URL parameters are similar to headers, adjust as needed
+}
+
 
 type TransformationMiddleware struct {
     Config TransformationConfig
@@ -26,10 +41,10 @@ func (tm *TransformationMiddleware) ApplyTransformations(next http.Handler) http
         }
 
         // Apply URL Transformations - you may extend this as needed
-        for param, value := range tm.Config.URLParams {
-            ModifyQueryParam(r, param, value)
+        for _, param := range tm.Config.URLParams {
+            ModifyQueryParam(r, param.Key, param.Value)
         }
-
+    
         // Call the next handler in the chain
         next.ServeHTTP(w, r)
     })

@@ -18,6 +18,7 @@ import (
 	"github.com/rickcollette/gaetwae/pkg/ratelimit"
 	"github.com/rickcollette/gaetwae/pkg/shared"
 	"github.com/rickcollette/gaetwae/pkg/tls"
+	"github.com/rickcollette/gaetwae/pkg/transform"
 	"golang.org/x/time/rate"
 )
 
@@ -41,16 +42,6 @@ type CacheConfig struct {
 		Servers []string `json:"servers,omitempty"`
 	} `json:"memcached,omitempty"`
 }
-type TransformationConfig struct {
-    Headers []struct {
-        Key   string `json:"key"`
-        Value string `json:"value"`
-    } `json:"headers"`
-    Body struct {
-        Type    string `json:"type"`
-        Content string `json:"content"`
-    } `json:"body"`
-}
 
 type Config struct {
 	LoadBalancingAlgorithm string                   `json:"loadBalancingAlgorithm"`
@@ -70,8 +61,8 @@ type Config struct {
 	} `json:"rateLimiting"`
 	Cache CacheConfig `json:"cache"`
     Transformations struct {
-        Request  TransformationConfig `json:"request"`
-        Response TransformationConfig `json:"response"`
+        Request  transform.TransformationConfig `json:"request"`
+        Response transform.TransformationConfig `json:"response"`
     } `json:"transformations"`
 }
 
