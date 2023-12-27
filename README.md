@@ -1,18 +1,100 @@
-# gaetwae (Gate-Way)
-Reverse proxy for highly-scalable rest api services
+
+# GAETWAE User Documentation
+
+## How to Deploy GAETWAE
+
+1. **Pre-requisites:**
+    - Ensure that you have the GAETWAE binary and `gaetwae.conf` configuration file.
+    - If using Redis or Memcached for caching, ensure those services are running.
+
+2. **Deployment Steps:**
+    - Place the GAETWAE binary and `gaetwae.conf` in your desired directory.
+    - Configure `gaetwae.conf` based on your requirements (see configuration examples below).
+    - Run the GAETWAE binary: `./gaetwae` (Linux/Mac) or `gaetwae.exe` (Windows).
+
+## Configuration Examples
+
+### 1. Load Balancing Algorithms
+
+```json
+{
+    "loadBalancingAlgorithm": "leastConnections",
+    "backends": [
+        {"url": "http://backend1"},
+        {"url": "http://backend2"}
+    ]
+}
+```
+
+### 2. Rate Limiting
+
+```json
+{
+    "rateLimiting": {
+        "enabled": true,
+        "requestsPerMinute": 1000
+    }
+}
+```
+
+### 3. Caching
+
+#### In-Memory Cache
+
+```json
+{
+    "cache": {
+        "enabled": true,
+        "type": "inMemory",
+        "capacity": 1000,
+        "expirationTimeSeconds": 600
+    }
+}
+```
+
+#### Redis Cache
+
+```json
+{
+    "cache": {
+        "enabled": true,
+        "type": "redis",
+        "redis": {
+            "address": "localhost:6379",
+            "password": "",
+            "db": 0
+        },
+        "expirationTimeSeconds": 600
+    }
+}
+```
+
+## Use Cases
+
+### 1. API Gateway
+
+Use GAETWAE as an API gateway to distribute incoming API requests to multiple backend services, ensuring efficient load distribution and improved availability.
+
+### 2. Rate Limiting
+
+Implement rate limiting to prevent abuse and ensure fair usage of your API services by limiting the number of requests a user can make in a given timeframe.
+
+### 3. Caching
+
+Improve response times and reduce backend load by caching the responses of frequent and resource-intensive requests.
+
+## Troubleshooting
+
+- Ensure the configuration file is correctly formatted and the specified paths and parameters are correct.
+- Check the logs for any error messages or warnings to diagnose issues.
+
+---
+
+For more details and advanced configurations, refer to the official documentation and resources.
 
 
 # TODO
 
-Load Balancing Algorithms: FINAL COMPLETENESS CHECK
-
-Backend Instances: Deploy multiple instances of your backend services, each running on a separate server or container. These instances should be identical and serve the same purpose, allowing you to scale horizontally as needed.
-
-Service Discovery: Implement a service discovery mechanism that keeps track of the available backend instances and their health status.
-
-Dynamic Configuration: Make your load balancer's configuration dynamic. As backend instances scale up or down, your API Gateway should automatically discover and include these instances in the load balancing pool.
-
-Health Checks: Implement health checks for backend instances. Periodically check the health of each instance to ensure it's responding correctly. Unhealthy instances should be temporarily removed from the pool until they recover.
 
 Failover: Implement failover mechanisms to handle cases where backend instances become unavailable. This may involve retrying requests on alternative instances or redirecting traffic to a backup data center or region.
 

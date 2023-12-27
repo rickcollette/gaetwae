@@ -41,6 +41,7 @@ type CacheConfig struct {
 	Memcached struct {
 		Servers []string `json:"servers,omitempty"`
 	} `json:"memcached,omitempty"`
+
 }
 
 type Config struct {
@@ -59,38 +60,38 @@ type Config struct {
 		Enabled           bool `json:"enabled"`
 		RequestsPerMinute int  `json:"requestsPerMinute"`
 	} `json:"rateLimiting"`
-	Cache CacheConfig `json:"cache"`
-    Transformations struct {
-        Request  transform.TransformationConfig `json:"request"`
-        Response transform.TransformationConfig `json:"response"`
-    } `json:"transformations"`
+	Cache           CacheConfig `json:"cache"`
+	Transformations struct {
+		Request  transform.TransformationConfig `json:"request"`
+		Response transform.TransformationConfig `json:"response"`
+	} `json:"transformations"`
 }
 
 var (
-    config Config
-    appCache cache.Cache  // Changed the variable name to appCache
-) 
+	config   Config
+	appCache cache.Cache // Changed the variable name to appCache
+)
 
 func main() {
-    err := loadConfig("gaetwae.conf")
-    if err != nil {
-        fmt.Println("Error loading configuration:", err)
-        return
-    }
-if config.Cache.Enabled {
-    switch config.Cache.Type {
-    case "inMemory":
-        appCache = cache.NewInMemoryCache(config.Cache.Capacity)
-    case "redis":
-        appCache = cache.NewRedisCache(config.Cache.Redis.Address, config.Cache.Redis.Password, config.Cache.Redis.DB)
-    case "memcached":
-        servers := strings.Join(config.Cache.Memcached.Servers, ",")
-        appCache = cache.NewMemcachedCache(servers, strconv.Itoa(config.Cache.ExpirationTime))
-    default:
-        fmt.Println("Unsupported cache type")
-        return
-    }
-}
+	err := loadConfig("gaetwae.conf")
+	if err != nil {
+		fmt.Println("Error loading configuration:", err)
+		return
+	}
+	if config.Cache.Enabled {
+		switch config.Cache.Type {
+		case "inMemory":
+			appCache = cache.NewInMemoryCache(config.Cache.Capacity)
+		case "redis":
+			appCache = cache.NewRedisCache(config.Cache.Redis.Address, config.Cache.Redis.Password, config.Cache.Redis.DB)
+		case "memcached":
+			servers := strings.Join(config.Cache.Memcached.Servers, ",")
+			appCache = cache.NewMemcachedCache(servers, strconv.Itoa(config.Cache.ExpirationTime))
+		default:
+			fmt.Println("Unsupported cache type")
+			return
+		}
+	}
 	if config.RateLimiting.Enabled {
 		r := rate.Every(1 * time.Minute / time.Duration(config.RateLimiting.RequestsPerMinute))
 		limiter := rate.NewLimiter(r, int(config.RateLimiting.RequestsPerMinute))
@@ -135,13 +136,13 @@ func loadConfig(filename string) error {
 func reverseProxyHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if config.Cache.Enabled {
-            if content, err := appCache.Get(r.URL.Path); err == nil {
-                w.Write(content)
-                return
-            }
+			if content, err := appCache.Get(r.URL.Path); err == nil {
+				w.Write(content)
+				return
+			}
 		}
 
-		var backend *shared.BackendInstance  // Declared the backend variable
+		var backend *shared.BackendInstance // Declared the backend variable
 
 		switch config.LoadBalancingAlgorithm {
 		case "leastConnections":
@@ -162,27 +163,27 @@ func reverseProxyHandler() http.HandlerFunc {
 				r.Header.Set(header.Name, header.Value)
 			}
 		}
-        for _, header := range config.Transformations.Request.Headers {
-            r.Header.Set(header.Key, header.Value)
-        }
-        
-        // If using a reverse proxy, you can set up a ModifyResponse function to apply response transformations
-        proxy.ModifyResponse = func(res *http.Response) error {
-            for _, header := range config.Transformations.Response.Headers {
-                res.Header.Set(header.Key, header.Value)
-            }
-        
-            if config.Transformations.Response.Body.Type == "append" {
-                body, _ := io.ReadAll(res.Body)
-                body = append(body, config.Transformations.Response.Body.Content...)
-                res.Body = io.NopCloser(bytes.NewReader(body))
-            }
-        
-            // Handle other body transformation types as needed
-        
-            return nil
-        }
-        
+		for _, header := range config.Transformations.Request.Headers {
+			r.Header.Set(header.Key, header.Value)
+		}
+
+		// If using a reverse proxy, you can set up a ModifyResponse function to apply response transformations
+		proxy.ModifyResponse = func(res *http.Response) error {
+			for _, header := range config.Transformations.Response.Headers {
+				res.Header.Set(header.Key, header.Value)
+			}
+
+			if config.Transformations.Response.Body.Type == "append" {
+				body, _ := io.ReadAll(res.Body)
+				body = append(body, config.Transformations.Response.Body.Content...)
+				res.Body = io.NopCloser(bytes.NewReader(body))
+			}
+
+			// Handle other body transformation types as needed
+
+			return nil
+		}
+
 		proxy.ServeHTTP(w, r)
 	}
 }
