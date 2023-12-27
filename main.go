@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/rickcollette/gaetwae/pkg/algorithms"
 	"github.com/rickcollette/gaetwae/pkg/cache"
 	"github.com/rickcollette/gaetwae/pkg/ratelimit"
@@ -41,7 +43,6 @@ type CacheConfig struct {
 	Memcached struct {
 		Servers []string `json:"servers,omitempty"`
 	} `json:"memcached,omitempty"`
-
 }
 
 type Config struct {
@@ -72,12 +73,61 @@ var (
 	appCache cache.Cache // Changed the variable name to appCache
 )
 
-func main() {
-	err := loadConfig("gaetwae.conf")
-	if err != nil {
-		fmt.Println("Error loading configuration:", err)
-		return
+func subscribeToConfigUpdates(redisClient *redis.Client, channelName string) {
+	pubsub := redisClient.Subscribe(context.Background(), channelName)
+	defer pubsub.Close()
+
+	for {
+		msg, err := pubsub.ReceiveMessage(context.Background())
+		if err != nil {
+			fmt.Println("Error receiving message:", err)
+			continue
+		}
+
+		err = updateConfigFromMessage(msg.Payload)
+		if err != nil {
+			fmt.Println("Error updating config:", err)
+		}
 	}
+}
+
+func updateConfigFromMessage(message string) error {
+    var updatedConfig Config
+    if err := json.Unmarshal([]byte(message), &updatedConfig); err != nil {
+        return err
+    }
+
+	config = updatedConfig
+
+    return nil
+}
+
+func main() {
+	    // Retrieve Redis configuration from environment variables
+		redisAddr := os.Getenv("REDIS_ADDR")
+		redisPassword := os.Getenv("REDIS_PASSWORD")
+		redisDB := os.Getenv("REDIS_DB")
+	
+		// Default values if environment variables are not set
+		if redisAddr == "" {
+			redisAddr = "localhost:6379" // Default Redis address
+		}
+		var redisDBNum int
+		if redisDB == "" {
+			redisDBNum = 0 // Default Redis DB number
+		} else {
+			redisDBNum, _ = strconv.Atoi(redisDB)
+		}
+	
+		// Initialize Redis client
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     redisAddr,
+			Password: redisPassword,
+			DB:       redisDBNum,
+		})
+
+	go subscribeToConfigUpdates(redisClient, "config_channel")
+
 	if config.Cache.Enabled {
 		switch config.Cache.Type {
 		case "inMemory":
@@ -103,34 +153,6 @@ func main() {
 	if err := tls.StartHTTPSServer(nil, config.TLS.CertPath, config.TLS.KeyPath); err != nil {
 		fmt.Println("Error starting HTTPS server:", err)
 	}
-}
-
-func loadConfig(filename string) error {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return err
-	}
-
-	if err := json.Unmarshal(data, &config); err != nil {
-		return err
-	}
-
-	shared.SetBackendInstances(config.Backends)
-
-	// Validate the load balancing algorithm
-	validAlgorithms := []string{"leastConnections", "roundRobin", "weightedLeastConnections", "weightedRoundRobin"}
-	valid := false
-	for _, alg := range validAlgorithms {
-		if config.LoadBalancingAlgorithm == alg {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return fmt.Errorf("invalid load balancing algorithm specified")
-	}
-
-	return nil
 }
 
 func reverseProxyHandler() http.HandlerFunc {

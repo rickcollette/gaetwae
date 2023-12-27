@@ -5,6 +5,7 @@ go 1.21.1
 require (
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/redis/go-redis/v9 v9.3.1
 	golang.org/x/time v0.3.0
 )
 
